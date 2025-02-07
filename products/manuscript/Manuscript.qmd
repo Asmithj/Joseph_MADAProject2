@@ -1,6 +1,6 @@
 ---
 title: "Example Manuscript Template for a Data Analysis Project"
-author: ""
+author: "Asmith Joseph"
 format:
   docx:
     toc: false
@@ -19,6 +19,15 @@ You don't need to have exactly these sections, but the content covering those se
 This uses MS Word as output format. [See here](https://quarto.org/docs/output-formats/ms-word.html) for more information. You can switch to other formats, like html or pdf. See [the Quarto documentation](https://quarto.org/) for other formats.
 
 
+
+
+#1.Load Required Libraries
+install.packages("janitor")      # For cleaning column names
+install.packages("lubridate")    # For working with dates
+
+
+
+
 ```{r, echo=FALSE, message=FALSE}
 # load a few R packages
 library(here)
@@ -26,22 +35,73 @@ library(knitr)
 ```
 
 
+
+
+```{r}
+
+
+# Load libraries
+library(tidyverse)
+library(janitor)
+library(lubridate)
+
+
+
+
+#2.Import the Dataset
+## Read the dataset from a local CSV file
+
+library(readr)
+PROMO_Data <- read_csv("C:/Users/ajose35/Desktop/L'ecole/MADA-course/AsmithJoseph-MADA-portfolio/Joseph-MADA-project/PROMO_Data.csv")
+View(PROMO_Data)
+
+
+
+#3. Initial Data Inspection
+# View structure of the dataset
+str(PROMO_Data)
+
+# View first few rows
+head(PROMO_Data)
+
+# Check column names
+colnames(PROMO_Data)
+
+# Get summary statistics
+summary(PROMO_Data)
+
+# Count missing values in each column
+colSums(is.na(PROMO_Data))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 **Authors**  
 
-* First Autor$^{1,2,*}$ (ORCID: 0000-0000-1234-5678) 
-* Second Author$^{3, *}$
-* Third Autor$^{3, \dagger}$
-* Last Author$^{1, 2, \land}$ 
+* Asmith Joseph$^{1,2,*}$ (ORCID: 0009-0004-6875-0868) 
+
 
 **Author affiliations**  
 
 1. College of Public Health, University of Georgia, Athens, GA, USA.
-2. Another Affiliation, Athens, GA, USA.
-3. Yet another Affiliation.
 
-$*$ These authors contributed equally to this work.
 
-$\land$ Corresponding author: some@email.com
+
+
+$\land$ Corresponding author: asmith.joseph@uga.edu
 
 $\dagger$ Disclaimer: The opinions expressed in this article are the
 author's own and don't reflect their employer.
@@ -63,11 +123,25 @@ _Write a summary of your project._
 ## General Background Information
 _Provide enough background on your topic that others can understand the why and how of your analysis_ 
 
+
+
 ## Description of data and data source
 _Describe what the data is, what it contains, where it is from, etc. Eventually this might be part of a methods section._
+The data for this analysis comes from the PROMOTE Birth Cohort 3 Randomized Controlled Trial, published in The Lancet (Kajubi et al., 2019). This was a double-blind, randomized, controlled, superiority trial conducted to compare monthly IPTp-SP vs. IPTp-DP among pregnant women in malaria-endemic regions.
+
+
+
+
+
+
+
 
 ## Questions/Hypotheses to be addressed
 _State the research questions you plan to answer with this analysis._
+ Does Malaria Preventive Treatment (DP vs. SP) Influence the Likelihood of Recurrent Placental Malaria in Subsequent Pregnancies?
+Hypothesis: Women who received DP during pregnancy may have a lower likelihood of recurrent placental malaria in subsequent pregnancies compared to those who received SP, due to better efficacy of DP in preventing malaria infection.
+ 
+ 
 
 To cite other work (important everywhere, but likely happens first in introduction), make sure your references are in the bibtex file specified in the YAML header above and have the right bibtex key. Then you can include like this:
 
@@ -100,14 +174,33 @@ knitr::include_graphics(here("assets","antigen-recognition.png"))
 
 ## Data aquisition
 _As applicable, explain where and how you got the data. If you directly import the data from an online source, you can combine this section with the next._
-
+_The dataset used in this analysis originates from the PROMOTE Birth Cohort 3 Randomized Controlled Trial, a double-blind, randomized controlled trial investigating the effectiveness of monthly intermittent preventive treatment of malaria (IPTp) in HIV-uninfected pregnant women and their infants. The trial compared sulfadoxine-pyrimethamine (SP) vs. dihydroartemisinin-piperaquine (DP) in malaria prevention.
 
 ## Data import and cleaning
 _Write code that reads in the file and cleans it so it's ready for analysis. Since this will be fairly long code for most datasets, it might be a good idea to have it in one or several R scripts. If that is the case, explain here briefly what kind of cleaning/processing you do, and provide more details and well documented code somewhere (e.g. as supplement in a paper). All materials, including files that contain code, should be commented well so everyone can follow along._
+-A subset of variables was created from the ClinEpiDB Data Repository, including data from 782 participants. The dataset consists of 138 variables covering various aspects such as:
+Study Arm, Participant Demographics, Clinical and Medical History, Obstetric History, Diagnosis and Obstetric Data (Pregnancy, Labor & Delivery, Delivery Complications), Medications Administered During Labor and Delivery, Aggregated Illness Data, Aggregated Lab Tests, Child Demographics
+The dataset was downloaded as a text document and processed in RStudio to ensure it was clean and ready for analysis. 
+
+The cleaning process involved: Handling Missing Values, Renaming Columns for Consistency, Converting Data Types (e.g., categorical, numerical, date formats), and Removing Duplicate Records.
+
 
 
 ## Statistical analysis
 _Explain anything related to your statistical analyses._
+Planned Analysis 
+Outcome & Predictors of Interest
+Primary Outcome: Placental Malaria (Yes/No)
+Key Predictor: Malaria Preventive Treatment (DP vs. SP)
+Additional Factors to Consider:
+Prior Malaria Exposure (Total malaria episodes before/during pregnancy)
+Maternal Characteristics (Gravidity, Parity, Age)
+Other Health Conditions (Hypertension, Anemia)
+
+Statistical Plan
+Descriptive Statistics: Compare PM rates across DP vs. SP groups.
+Logistic Regression: Model the effect of DP vs. SP on the likelihood of PM, adjusting for potential confounders.
+Interaction Analysis: Check if prior malaria exposure modifies the effect of DP vs. SP on PM risk.
 
 
 {{< pagebreak >}}
