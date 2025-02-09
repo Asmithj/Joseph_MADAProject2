@@ -14,6 +14,7 @@ csl: ../../assets/american-journal-of-epidemiology.csl
 
 
 The structure below is one possible setup for a manuscript, or a general data analysis project (including the course project). Adjust as needed. 
+
 You don't need to have exactly these sections, but the content covering those sections should be addressed.
 
 This uses MS Word as output format. [See here](https://quarto.org/docs/output-formats/ms-word.html) for more information. You can switch to other formats, like html or pdf. See [the Quarto documentation](https://quarto.org/) for other formats.
