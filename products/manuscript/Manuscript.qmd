@@ -38,22 +38,26 @@ library(knitr)
 
 
 ```{r}
-
-
-# Load libraries
+# Load necessary libraries
 library(tidyverse)
 library(janitor)
 library(lubridate)
-
-
-
-
-#2.Import the Dataset
-## Read the dataset from a local CSV file
-
 library(readr)
-PROMO_Data <- read_csv("C:/Users/ajose35/Desktop/L'ecole/MADA-course/AsmithJoseph-MADA-portfolio/Joseph-MADA-project/PROMO_Data.csv")
+library(here)
+
+# Print the root directory to confirm the correct path
+print(here())
+
+# Read the CSV file using here()
+PROMO_Data <- read_csv(here("PROMO_Data.csv"))
+
+# View the dataset
 View(PROMO_Data)
+
+
+# View the data
+View(PROMO_Data)
+
 
 
 
