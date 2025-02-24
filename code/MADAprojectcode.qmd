@@ -370,6 +370,32 @@ characteristics_table <- PROMO_Data %>%
 
 
 
+```{r}
+#| label: fig-schematic
+#| fig-cap: "Workflow schematic for analyzing associations between malaria during pregnancy, treatment regimens, and health outcomes."
+#| echo: FALSE
+#| screenshot.force: TRUE  # This forces a screenshot to be taken
+
+library(DiagrammeR)
+
+grViz("
+  digraph statistical_workflow {
+    node [shape = rectangle, style = filled, fillcolor = lightblue]
+
+    Data_Collection [label = 'Data Collection']
+    Data_Cleaning [label = 'Data Cleaning & Preprocessing']
+    Exploratory_Analysis [label = 'Exploratory & Descriptive Analysis']
+    Statistical_Tests [label = 'Inferential Analysis\\n(Logistic, Poisson, Chi-Square)']
+    Sensitivity_Analyses [label = 'Sensitivity Analyses']
+    Results_Reporting [label = 'Reporting & Visualization']
+
+    Data_Collection -> Data_Cleaning -> Exploratory_Analysis -> Statistical_Tests -> Sensitivity_Analyses -> Results_Reporting
+  }
+")
+
+```
+
+```
 
 
 

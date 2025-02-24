@@ -6,41 +6,14 @@ format:
     toc: false
     number-sections: true
     highlight-style: github
-    prefer-html: true  # Only here
+    prefer-html: true
+    reference-location: margin  # Enable reference links
+knitr:
+  opts_chunk:
+    screenshot.force: TRUE
 bibliography: ../../assets/dataanalysis-references.bib
 csl: ../../assets/american-journal-of-epidemiology.csl
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-The structure below is one possible setup for a manuscript, or a general data analysis project (including the course project). Adjust as needed.
-
-You don't need to have exactly these sections, but the content covering those sections should be addressed.
-
-This uses MS Word as output format. [See here](https://quarto.org/docs/output-formats/ms-word.html) for more information. You can switch to other formats, like html or pdf. See [the Quarto documentation](https://quarto.org/) for other formats.
-
-```{r}
-# Loading necessary libraries
-library(tidyverse)
-library(janitor)
-library(knitr)
-library(lubridate)
-library(readr)
-library(here)
-```
 
 **Authors**
 
@@ -90,30 +63,6 @@ In addition, the study will explore infant health outcomes and the role of place
 
 ## Schematic of workflow
 
-```{r}
-#| label: fig-schematic
-#| fig-cap: "Workflow schematic for analyzing associations between malaria during pregnancy, treatment regimens, and health outcomes."
-#| echo: FALSE
-
-library(DiagrammeR)
-
-grViz("
-  digraph statistical_workflow {
-    node [shape = rectangle, style = filled, fillcolor = lightblue]
-    
-    Data_Collection [label = 'Data Collection']
-    Data_Cleaning [label = 'Data Cleaning & Preprocessing']
-    Exploratory_Analysis [label = 'Exploratory & Descriptive Analysis']
-    Statistical_Tests [label = 'Inferential Analysis\\n(Logistic, Poisson, Chi-Square)']
-    Sensitivity_Analyses [label = 'Sensitivity Analyses']
-    Results_Reporting [label = 'Reporting & Visualization']
-
-    Data_Collection -> Data_Cleaning -> Exploratory_Analysis -> Statistical_Tests -> Sensitivity_Analyses -> Results_Reporting
-  }
-")
-
-```
-
 ## 3.1 Data aquisition
 
 The data for this study were obtained from ClinEpiDB, a public repository, specifically from Release #24 dated August 30, 2022. This dataset originates from a double-blind randomized controlled trial evaluating intermittent preventive treatment of malaria (IPTp) in HIV-uninfected pregnant women. The dataset, which includes 782 observations along with comprehensive maternal and infant health variables, was directly downloaded from the ClinEpiDB website without the need for authentication. Detailed metadata and documentation were also accessed via the platform, ensuring a clear understanding of variable definitions and study protocols.
@@ -142,78 +91,21 @@ In addition, cross-tabulations were performed to explore preliminary association
 
 # 4. Results
 
-```{r}
-# Print the root directory to confirm the correct path
-print(here())
-
-# Read the CSV file using here()
-PROMO_Data <- read_csv(here("PROMO_Data.csv"))
-
-# View the dataset
-View(PROMO_Data)
-
-```
-
-```{r}
-#3. Initial Data Inspection
-# View structure of the dataset
-str(PROMO_Data)
-
-# View first few rows
-head(PROMO_Data)
-
-# Check column names
-colnames(PROMO_Data)
-
-# Get summary statistics
-summary(PROMO_Data)
-
-# Count missing values in each column
-colSums(is.na(PROMO_Data))
-```
-
 ## 4.1 Exploratory/Descriptive analysis
 
-*Use a combination of text/tables/figures to explore and describe your data. Show the most important descriptive results here. Additional ones should go in the supplement. Even more can be in the R and Quarto files that are part of your project.*
 
-@tbl-summarytable shows a summary of the data.
 
 Note the loading of the data providing a **relative** path using the `../../` notation. (Two dots means a folder up). You never want to specify an **absolute** path like `C:\ahandel\myproject\results\` because if you share this with someone, it won't work for them since they don't have that path. You can also use the `here` R package to create paths. See examples of that below. I generally recommend the `here` package.
-
-```{r}
-#| label: tbl-summarytable
-#| tbl-cap: "Data summary table."
-#| echo: FALSE
-resulttable=readRDS("../../results/tables/summarytable.rds")
-knitr::kable(resulttable)
-```
 
 ## 4.2 Basic statistical analysis
 
 *To get some further insight into your data, if reasonable you could compute simple statistics (e.g. simple models with 1 predictor) to look for associations between your outcome(s) and each individual predictor variable. Though note that unless you pre-specified the outcome and main exposure, any "p\<0.05 means statistical significance" interpretation is not valid.*
 
-@fig-result shows a scatterplot figure produced by one of the R scripts.
-
-```{r}
-#| label: fig-result
-#| fig-cap: "Height and weight stratified by gender."
-#| echo: FALSE
-knitr::include_graphics(here("results","figures","height-weight-stratified.png"))
-```
 
 ## 4.3 Full analysis
 
 *Use one or several suitable statistical/machine learning methods to analyze your data and to produce meaningful figures, tables, etc. This might again be code that is best placed in one or several separate R scripts that need to be well documented. You want the code to produce figures and data ready for display as tables, and save those. Then you load them here.*
 
-Example @tbl-resulttable2 shows a summary of a linear model fit.
-
-```{r}
-#| label: tbl-resulttable2
-#| tbl-cap: "Linear model fit table."
-#| echo: FALSE
-resulttable2 = readRDS(here("results","tables","resulttable2.rds"))
-knitr::kable(resulttable2)
-```
 
 {{< pagebreak >}}
 
@@ -240,5 +132,12 @@ These papers [@mckay2020; @mckay2020a] are good examples of papers published usi
 Note that this cited reference will show up at the end of the document, the reference formatting is determined by the CSL file specified in the YAML header. Many more style files for almost any journal [are available](https://www.zotero.org/styles). You also specify the location of your bibtex reference file in the YAML. You can call your reference file anything you like.
 
 {{< pagebreak >}}
+
+
+
+
+
+
+
 
 # References
