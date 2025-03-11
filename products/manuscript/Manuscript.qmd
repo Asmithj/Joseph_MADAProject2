@@ -1,19 +1,63 @@
 ---
+knitr:
+  opts_chunk:
+    echo: false
+    message: false
+    warning: false
+
 title: "The Impact of Malaria Episodes and Treatment Regimens on Adverse Pregnancy Outcomes in Ugandan Women"
 author: "Asmith Joseph"
 format:
   docx:
     toc: false
     number-sections: true
-    highlight-style: github
-    prefer-html: true
-    reference-location: margin  # Enable reference links
-knitr:
-  opts_chunk:
-    screenshot.force: TRUE
+    reference-location: margin
 bibliography: ../../assets/dataanalysis-references.bib
 csl: ../../assets/american-journal-of-epidemiology.csl
 ---
+
+
+
+
+
+
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Load Required Libraries
+# Essential libraries for data handling, visualization, and analysis
+
+library(here)             # Manage file paths
+library(tidyverse)        # Core data wrangling: includes dplyr, ggplot2, readr, forcats, lubridate
+library(janitor)          # Cleaning column names
+library(skimr)            # Quick data summary
+library(gtsummary)        # Creating summary tables
+library(gt)               # Formatting tables
+library(knitr)            # Table formatting
+library(kableExtra)       # Additional table customization
+library(ggpubr)           # Publication-ready plots
+library(Amelia)           # Missing data visualization
+library(pwr)              # Power analysis
+library(DiagrammeR)       # Flowcharts/Diagrams
+library(survival)         # Survival analysis
+library(survminer)        # Survival plots
+
+```
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Define the correct file path using the `here` package
+data_path <- here("data", "raw-data", "PROMO_Data.csv")
+
+# Read the CSV file, suppressing messages
+PROMO_Data <- read_csv(data_path, show_col_types = FALSE)
+```
+
+
+
+
 
 **Authors**
 
@@ -87,13 +131,162 @@ Chi-Square Tests and Logistic Regression (Infant Health Outcomes)
 
 This section focuses on birth weight, gestational age, and neonatal mortality outcomes. First, we will assess whether infants born to mothers treated with DP are less likely to have low birth weight compared to those treated with SP. A chi-square test will initially compare proportions, followed by logistic regression to adjust for confounders such as maternal nutrition and gestational age. Next, neonatal mortality will be compared between treatment groups using chi-square tests for unadjusted differences, with logistic regression models controlling for factors such as birth complications, preterm birth, and birth weight. Lastly, we will examine whether malaria infection rates during pregnancy are associated with low birth weight and preterm birth. Logistic regression models will be used for this analysis, adjusting for maternal age, parity, and gestational age.
 
-Logistic Regression and Chi-Square Tests (Malaria and Pregnancy Outcomes) 
+Logistic Regression and Chi-Square Tests (Malaria and Pregnancy Outcomes)
 
 This section will assess whether placental malaria is associated with preterm birth and low birth weight. Logistic regression models will evaluate these associations while adjusting for relevant confounders, such as the number of malaria episodes during pregnancy and maternal health variables. Additionally, the difference in placental malaria prevalence between SP and DP treatment groups will be examined using chi-square tests for initial comparisons and logistic regression for adjustments, controlling for factors like the number of malaria episodes and regional differences.
 
 {{< pagebreak >}}
 
 # Results
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Data Import & Initial Inspection 
+
+# Read the dataset
+PROMO_Data <- read_csv(here("data", "raw-data", "PROMO_Data.csv"), show_col_types = FALSE)
+```
+
+
+
+
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#  Data Cleaning & Transformation
+
+# Load required libraries (if not already loaded)
+library(janitor)   # For clean_names()
+
+# Clean Column Names
+PROMO_Data <- PROMO_Data %>% clean_names()
+
+# Remove Empty Rows
+PROMO_Data <- PROMO_Data %>%
+  filter(!is.na(study_arm), !is.na(stillbirth), !is.na(neonatal_death), !is.na(infant_low_birth_weight_2500_g))
+
+#  Handle Missing Values
+PROMO_Data <- PROMO_Data %>%
+  replace_na(list(
+    study_arm = "Unknown",
+    stillbirth = "Unknown",
+    neonatal_death = "Unknown",
+    placental_malaria = "Unknown",
+    delivery_mode = "Unknown"
+  )) %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = TRUE), .)))
+
+#  Convert Data Types
+PROMO_Data <- PROMO_Data %>%
+  mutate(across(c(study_arm, stillbirth, neonatal_death, placental_malaria, delivery_mode), as.factor)) %>%
+  mutate(across(contains("date"), as.Date, format="%Y-%m-%d"))
+
+#  Verify Changes
+glimpse(PROMO_Data)  # More readable than str()
+
+#  Summary of Numeric Variables
+print(skim(PROMO_Data))  # Explicitly print skim output
+
+#  Frequency Counts of Key Categorical Variables
+PROMO_Data %>% count(study_arm, sort = TRUE) %>% print()
+PROMO_Data %>% count(placental_malaria, sort = TRUE) %>% print()
+PROMO_Data %>% count(preterm_birth_ontoneo, sort = TRUE) %>% print()
+
+
+```
+
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#  Load required libraries
+library(dplyr)
+library(gtsummary)
+
+#  Select key baseline variables (ensure they exist)
+baseline_vars <- c("study_arm", "education_level_omrse", "gravidity", "parity", 
+                   "placental_malaria", "preterm_birth_ontoneo", "stillbirth", 
+                   "neonatal_death", "infant_low_birth_weight_2500_g")
+
+#  Ensure only existing variables are used
+baseline_vars <- intersect(baseline_vars, colnames(PROMO_Data))
+
+# Generate table only if dataset has rows
+if (nrow(PROMO_Data) > 0) {
+  baseline_characteristics <- PROMO_Data %>%
+    select(all_of(baseline_vars)) %>%
+    tbl_summary(by = study_arm) %>%
+    add_p() %>%
+    modify_header(label = "**Variable**") %>%
+    bold_labels()
+  
+  # Display only the formatted table
+  baseline_characteristics
+} else {
+  cat("️ No data available for analysis.")
+}
+
+```
+
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Load required libraries
+library(dplyr)
+library(gtsummary)
+
+# Define key variables (check if they exist in dataset)
+malaria_outcome_vars <- c("study_arm", 
+                           "total_malaria_episodes_during_pregnancy", 
+                           "placental_malaria", 
+                           "preterm_birth_ontoneo", 
+                           "stillbirth", 
+                           "infant_low_birth_weight_2500_g")
+
+#  Keep only variables that exist in dataset
+malaria_outcome_vars <- intersect(malaria_outcome_vars, colnames(PROMO_Data))
+
+#  Generate the table only if dataset has rows
+if (nrow(PROMO_Data) > 0) {
+  malaria_outcomes_table <- PROMO_Data %>%
+    select(all_of(malaria_outcome_vars)) %>%
+    tbl_summary(
+      by = study_arm,  # Compare DP vs. SP groups
+      statistic = list(
+        total_malaria_episodes_during_pregnancy ~ "{mean} ± {sd}",  # Show mean ± SD
+        all_categorical() ~ "{n} ({p}%)"  # Show counts and percentages for categorical variables
+      ),
+      label = list(
+        total_malaria_episodes_during_pregnancy ~ "Total Malaria Episodes (Mean ± SD)",
+        placental_malaria ~ "Placental Malaria (Histology)",
+        preterm_birth_ontoneo ~ "Preterm Birth",
+        stillbirth ~ "Stillbirth",
+        infant_low_birth_weight_2500_g ~ "Low Birth Weight (<2500g)"
+      )
+    ) %>%
+    add_p() %>%  # Add p-values for comparisons
+    modify_header(label = "**Variable**") %>%  # Ensure readable column headers
+    bold_labels()  # Bold table labels for clarity
+
+  #  Display only the formatted table
+  malaria_outcomes_table
+} else {
+  cat("️ No data available for analysis.")
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
 
 ## Exploratory/Descriptive analysis
 

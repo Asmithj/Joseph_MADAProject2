@@ -1,0 +1,390 @@
+---
+title: "The Impact of Malaria Episodes and Treatment Regimens on Adverse Pregnancy Outcomes in Ugandan Women"
+author: "Asmith Joseph"
+date: "2025-02-23"
+output: html_document
+---
+
+
+
+```{r}
+# **1. Load Required Libraries**
+# Essential libraries for data handling, visualization, and analysis
+
+library(here)             # Manage file paths
+library(dplyr)            # Data manipulation
+library(ggplot2)          # Visualization
+library(tidyverse)        # Data wrangling and cleaning
+library(janitor)          # Cleaning column names
+library(skimr)            # Quick data summary
+library(lubridate)        # Working with dates
+library(readr)            # Reading CSV files
+library(gtsummary)        # Creating summary tables
+library(gt)               # Formatting tables
+library(knitr)            # Table formatting
+library(kableExtra)       # Additional table customization
+library(ggpubr)           # Publication-ready plots
+library(Amelia)           # Missing data visualization
+library(forcats)          # Working with categorical variables
+library(pwr)              # Power analysis
+library(DiagrammeR)       # Flowcharts/Diagrams
+library(survival)         # Survival analysis
+library(survminer)        # Survival plots
+```
+
+
+
+
+
+
+
+
+# Data Import & Initial Inspection 
+```{r}
+# Read the dataset
+PROMO_Data <- read_csv(here("data", "raw-data", "PROMO_Data.csv"))
+
+# **Dataset Overview**
+cat("Number of Observations:", nrow(PROMO_Data), "\n")
+cat("Number of Variables:", ncol(PROMO_Data), "\n")
+
+# **Inspect Data Structure**
+str(PROMO_Data)
+head(PROMO_Data)
+
+# **Check Missing Values**
+missing_values <- colSums(is.na(PROMO_Data))
+print(missing_values)
+
+# **Summary Statistics**
+summary(PROMO_Data)
+
+```
+
+
+
+
+
+
+# Data Cleaning & Transformation
+```{r}
+# Clean Column Names**
+PROMO_Data <- PROMO_Data %>% clean_names()
+
+# **Remove Empty Rows**
+PROMO_Data <- PROMO_Data %>%
+  filter(!is.na(study_arm), !is.na(stillbirth), !is.na(neonatal_death), !is.na(infant_low_birth_weight_2500_g))
+
+# **Handle Missing Values**
+PROMO_Data <- PROMO_Data %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = TRUE), .))) %>%
+  mutate(across(where(is.character), ~ replace_na(., "Unknown")))
+
+# **Convert Data Types**
+PROMO_Data <- PROMO_Data %>%
+  mutate(across(c(study_arm, stillbirth, neonatal_death, placental_malaria, delivery_mode), as.factor)) %>%
+  mutate(across(contains("date"), as.Date, format="%Y-%m-%d"))
+
+# **Verify Changes**
+str(PROMO_Data)
+
+```
+
+
+
+
+
+
+# Exploratory Data Analysis (EDA)
+
+```{r}
+# **Summary of Numeric Variables**
+skim(PROMO_Data)
+
+# **Frequency Counts of Key Categorical Variables**
+PROMO_Data %>%
+  count(study_arm, sort = TRUE)
+
+PROMO_Data %>%
+  count(placental_malaria, sort = TRUE)
+
+PROMO_Data %>%
+  count(preterm_birth_ontoneo, sort = TRUE)
+
+```
+
+
+
+
+
+# Characteristics Tables
+*Baseline Characteristics Table*
+
+```{r}
+# Select key variables for baseline characteristics
+baseline_vars <- c("study_arm", "education_level_omrse", "gravidity", "parity", 
+                   "placental_malaria", "preterm_birth_ontoneo", "stillbirth", 
+                   "neonatal_death", "infant_low_birth_weight_2500_g")
+
+# **Ensure selected variables exist**
+baseline_vars <- baseline_vars[baseline_vars %in% colnames(PROMO_Data)]
+
+# Generate formatted table using gtsummary
+baseline_characteristics <- PROMO_Data %>%
+  select(all_of(baseline_vars)) %>%
+  tbl_summary(by = study_arm) %>%
+  add_p() %>%
+  modify_header(label = "**Variable**") %>%
+  bold_labels()
+
+baseline_characteristics
+
+```
+
+
+
+
+*Continuous Characteristics by Study Arm*
+
+```{r}
+# Function to summarize continuous variables
+summarize_continuous <- function(var) {
+  sp_mean <- mean(PROMO_Data[[var]][PROMO_Data$study_arm == "Sulphadoxine-pyrimethamine (SP)"], na.rm = TRUE)
+  sp_sd <- sd(PROMO_Data[[var]][PROMO_Data$study_arm == "Sulphadoxine-pyrimethamine (SP)"], na.rm = TRUE)
+  
+  dp_mean <- mean(PROMO_Data[[var]][PROMO_Data$study_arm == "Dihydroartemisinin-piperaquine (DP)"], na.rm = TRUE)
+  dp_sd <- sd(PROMO_Data[[var]][PROMO_Data$study_arm == "Dihydroartemisinin-piperaquine (DP)"], na.rm = TRUE)
+  
+  p_value <- t.test(PROMO_Data[[var]] ~ PROMO_Data$study_arm, var.equal = TRUE, na.rm = TRUE)$p.value
+  
+  return(c(sprintf("%.1f (%.1f)", sp_mean, sp_sd),
+           sprintf("%.1f (%.1f)", dp_mean, dp_sd),
+           sprintf("%.3f", p_value)))
+}
+
+# Create summary table
+summary_table <- tibble(
+  Characteristic = c("Maternal Age (years)", "Gravidity", "Gestational Age at Delivery (weeks)", "Malaria Episodes During Pregnancy"),
+  `SP (Mean ± SD)` = sapply(c("age_at_enrollment_years", "gravidity", "gestational_age_at_delivery_weeks", "total_malaria_episodes_during_pregnancy"), summarize_continuous)[1,],
+  `DP (Mean ± SD)` = sapply(c("age_at_enrollment_years", "gravidity", "gestational_age_at_delivery_weeks", "total_malaria_episodes_during_pregnancy"), summarize_continuous)[2,],
+  `p-value` = sapply(c("age_at_enrollment_years", "gravidity", "gestational_age_at_delivery_weeks", "total_malaria_episodes_during_pregnancy"), summarize_continuous)[3,]
+)
+
+# Display table using gt
+summary_table %>%
+  gt() %>%
+  tab_header(title = md("**Table: Continuous Characteristics by Study Arm**")) %>%
+  cols_align(align = "center") %>%
+  tab_options(
+    table.font.size = px(12),
+    heading.title.font.size = px(14),
+    table.border.top.style = "solid",
+    table.border.bottom.style = "solid"
+  )
+
+```
+
+
+
+
+
+```{r}
+# Load required packages
+library(dplyr)
+library(gtsummary)
+
+# Select relevant variables for malaria episodes and birth outcomes
+malaria_outcomes_table <- PROMO_Data %>%
+  select(study_arm, 
+         total_malaria_episodes_during_pregnancy, 
+         placental_malaria, 
+         preterm_birth_ontoneo, 
+         stillbirth, 
+         infant_low_birth_weight_2500_g) %>%
+  tbl_summary(
+    by = study_arm,  # Compare DP vs. SP
+    statistic = list(
+      total_malaria_episodes_during_pregnancy ~ "{mean} ± {sd}",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    label = list(
+      total_malaria_episodes_during_pregnancy ~ "Total Malaria Episodes (Mean ± SD)",
+      placental_malaria ~ "Placental Malaria (Histology)",
+      preterm_birth_ontoneo ~ "Preterm Birth",
+      stillbirth ~ "Stillbirth",
+      infant_low_birth_weight_2500_g ~ "Low Birth Weight (<2500g)"
+    )
+  ) %>%
+  add_p() %>%
+  bold_labels()
+
+# Print the formatted table
+malaria_outcomes_table
+
+```
+
+
+
+
+
+
+*Categorical Characteristics by Study Arm*
+
+```{r}
+# Generate a summary table for categorical characteristics
+categorical_table <- PROMO_Data %>%
+  select(study_arm, stillbirth, neonatal_death, infant_low_birth_weight_2500_g) %>%
+  tbl_summary(by = study_arm, 
+              statistic = list(all_categorical() ~ "{n} ({p}%)"),
+              label = list(stillbirth ~ "Stillbirth",
+                           neonatal_death ~ "Neonatal Death",
+                           infant_low_birth_weight_2500_g ~ "Low Birth Weight")) %>%
+  add_p() %>%
+  bold_labels()
+
+categorical_table
+
+```
+
+
+
+
+
+
+# Data Visualization
+
+*Histogram: Malaria Episodes*
+
+```{r}
+ggplot(PROMO_Data, aes(x = total_malaria_episodes_during_pregnancy)) +
+  geom_histogram(binwidth = 1, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of Malaria Episodes", x = "Malaria Episodes", y = "Count") +
+  theme_minimal()
+
+```
+
+
+
+
+*Boxplot: Gestational Age at Delivery*
+```{r}
+ggplot(PROMO_Data, aes(x = study_arm, y = gestational_age_at_delivery_weeks, fill = study_arm)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(title = "Gestational Age at Delivery by Study Arm",
+       x = "Study Arm", y = "Gestational Age (weeks)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+
+*Placental Malaria Prevalence by Study Arm*
+```{r}
+ggplot(PROMO_Data, aes(x = placental_malaria, fill = study_arm)) +
+  geom_bar(position = "dodge", alpha = 0.7) +
+  labs(title = "Placental Malaria Prevalence by Study Arm",
+       x = "Placental Malaria", y = "Count") +
+  theme_minimal()
+
+```
+
+
+
+*Stillbirth & Neonatal Death by Study Arm*
+```{r}
+ggplot(PROMO_Data, aes(x = study_arm, fill = stillbirth)) +
+  geom_bar(position = "dodge", alpha = 0.7) +
+  labs(title = "Stillbirth Rates by Study Arm", x = "Study Arm", y = "Count") +
+  theme_minimal()
+```
+
+
+
+
+```{r}
+ggplot(PROMO_Data, aes(x = study_arm, fill = neonatal_death)) +
+  geom_bar(position = "dodge", alpha = 0.7) +
+  labs(title = "Neonatal Mortality by Study Arm", x = "Study Arm", y = "Count") +
+  theme_minimal()
+
+```
+
+
+
+
+
+# Statistical Analysis
+
+*Chi-Square Test: Study Arm vs. Stillbirth*
+```{r}
+table_study_stillbirth <- table(PROMO_Data$study_arm, PROMO_Data$stillbirth)
+chisq.test(table_study_stillbirth)
+
+```
+
+
+*Logistic Regression: Neonatal Death Prediction*
+```{r}
+logit_neonatal_death <- glm(neonatal_death ~ study_arm + total_malaria_episodes_during_pregnancy + gestational_age_at_delivery_weeks, 
+                            data = PROMO_Data, family = binomial)
+
+summary(logit_neonatal_death)
+
+```
+
+
+
+
+
+
+*Directed Acyclic Graph (DAG)*
+```{r}
+library(ggdag)
+library(dagitty)
+
+dag <- dagitty("dag {
+  'Malaria Exposure' -> 'Placental Malaria'
+  'Placental Malaria' -> 'Inflammation'
+  'Inflammation' -> 'Pregnancy Outcomes'
+  'Malaria Exposure' -> 'Pregnancy Outcomes'
+  'Pregnancy Outcomes' -> 'Neonatal Health'
+  'Treatment (SP vs. DP)' -> 'Malaria Exposure'
+  'Treatment (SP vs. DP)' -> 'Pregnancy Outcomes'
+}")
+
+ggdag(dag, text = TRUE, use_labels = "name") +
+  theme_minimal() +
+  ggtitle("Directed Acyclic Graph (DAG) of Malaria in Pregnancy and Birth Outcomes")
+
+```
+
+
+
+
+
+*Kaplan-Meier Survival Curve*
+```{r}
+PROMO_Data$surv_obj <- Surv(PROMO_Data$gestational_age_at_enrollment_weeks, 
+                             PROMO_Data$total_malaria_episodes_during_pregnancy > 0)
+
+km_fit <- survfit(surv_obj ~ study_arm, data = PROMO_Data)
+
+ggsurvplot(km_fit, data = PROMO_Data,
+           conf.int = TRUE, pval = TRUE, risk.table = TRUE,
+           legend.title = "Treatment Arm",
+           ggtheme = theme_minimal(),
+           title = "Time to Malaria Infection During Pregnancy")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
