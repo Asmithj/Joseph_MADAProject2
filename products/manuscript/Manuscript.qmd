@@ -1,12 +1,6 @@
 ---
-knitr:
-  opts_chunk:
-    echo: false
-    message: false
-    warning: false
-
 title: "The Impact of Malaria Episodes and Treatment Regimens on Adverse Pregnancy Outcomes in Ugandan Women"
-author: "Asmith Joseph"
+author: "Asmith Joseph"  
 format:
   docx:
     toc: false
@@ -14,17 +8,14 @@ format:
     reference-location: margin
 bibliography: ../../assets/dataanalysis-references.bib
 csl: ../../assets/american-journal-of-epidemiology.csl
+knitr:
+  opts_chunk:
+    echo: false
+    message: false
+    warning: false
 ---
 
-
-
-
-
-
-
-
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold"}
 # Load Required Libraries
 # Essential libraries for data handling, visualization, and analysis
 
@@ -45,19 +36,13 @@ library(survminer)        # Survival plots
 
 ```
 
-
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold"}
 # Define the correct file path using the `here` package
 data_path <- here("data", "raw-data", "PROMO_Data.csv")
 
 # Read the CSV file, suppressing messages
 PROMO_Data <- read_csv(data_path, show_col_types = FALSE)
 ```
-
-
-
-
 
 **Authors**
 
@@ -139,20 +124,14 @@ This section will assess whether placental malaria is associated with preterm bi
 
 # Results
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold"}
 # Data Import & Initial Inspection 
 
 # Read the dataset
 PROMO_Data <- read_csv(here("data", "raw-data", "PROMO_Data.csv"), show_col_types = FALSE)
 ```
 
-
-
-
-
-
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold"}
 #  Data Cleaning & Transformation
 
 # Load required libraries (if not already loaded)
@@ -195,10 +174,7 @@ PROMO_Data %>% count(preterm_birth_ontoneo, sort = TRUE) %>% print()
 
 ```
 
-
-
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold"}
 #  Load required libraries
 library(dplyr)
 library(gtsummary)
@@ -228,65 +204,90 @@ if (nrow(PROMO_Data) > 0) {
 
 ```
 
-
-
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold"}
 # Load required libraries
 library(dplyr)
 library(gtsummary)
 
-# Define key variables (check if they exist in dataset)
-malaria_outcome_vars <- c("study_arm", 
-                           "total_malaria_episodes_during_pregnancy", 
-                           "placental_malaria", 
-                           "preterm_birth_ontoneo", 
-                           "stillbirth", 
-                           "infant_low_birth_weight_2500_g")
+# Define malaria outcome variables
+malaria_outcome_vars <- c(
+  "total_malaria_episodes_during_pregnancy",
+  "placental_malaria",
+  "preterm_birth_ontoneo",
+  "stillbirth",
+  "infant_low_birth_weight_2500_g"
+)
 
-#  Keep only variables that exist in dataset
-malaria_outcome_vars <- intersect(malaria_outcome_vars, colnames(PROMO_Data))
+# Ensure that `study_arm` is in the dataset
+if (!"study_arm" %in% colnames(PROMO_Data)) {
+  stop("⚠️ Error: `study_arm` column not found in PROMO_Data. Please check column names.")
+}
 
-#  Generate the table only if dataset has rows
-if (nrow(PROMO_Data) > 0) {
+# Remove `stillbirth` and any other variable that has only one level
+valid_outcomes <- malaria_outcome_vars[sapply(PROMO_Data[malaria_outcome_vars], function(x) length(unique(na.omit(x))) > 1)]
+
+# Ensure `study_arm` is included in the selected variables
+valid_outcomes <- c(valid_outcomes, "study_arm")
+
+# Define label mappings dynamically based on valid variables
+all_labels <- list(
+  total_malaria_episodes_during_pregnancy ~ "Total Malaria Episodes (Mean ± SD)",
+  placental_malaria ~ "Placental Malaria (Histology)",
+  preterm_birth_ontoneo ~ "Preterm Birth",
+  stillbirth ~ "Stillbirth",
+  infant_low_birth_weight_2500_g ~ "Low Birth Weight (<2500g)"
+)
+
+dynamic_labels <- all_labels[names(all_labels) %in% valid_outcomes]
+
+# Define a custom function to format p-values
+format_pvalue <- function(pvals) {
+  sapply(pvals, function(x) {
+    if (is.na(x)) {
+      return("NA")  # Handle missing values properly
+    } else if (is.numeric(x)) {
+      if (x < 0.001) {
+        return("< 0.001")  # Report very small values as "< 0.001"
+      } else if (x < 0.01) {
+        return(format(round(x, 3), nsmall = 3))  # Report between 0.001 and 0.01 to three decimal places
+      } else {
+        return(format(round(x, 2), nsmall = 2))  # Report >= 0.01 to two decimal places
+      }
+    } else {
+      return("NA")  # Return "NA" for non-numeric values
+    }
+  })
+}
+
+# Generate table with formatted p-values
+if (nrow(PROMO_Data) > 0 && length(valid_outcomes) > 1) {
+  
   malaria_outcomes_table <- PROMO_Data %>%
-    select(all_of(malaria_outcome_vars)) %>%
+    select(all_of(valid_outcomes)) %>%
     tbl_summary(
-      by = study_arm,  # Compare DP vs. SP groups
+      by = "study_arm",
       statistic = list(
-        total_malaria_episodes_during_pregnancy ~ "{mean} ± {sd}",  # Show mean ± SD
-        all_categorical() ~ "{n} ({p}%)"  # Show counts and percentages for categorical variables
+        total_malaria_episodes_during_pregnancy ~ "{mean} ± {sd}",
+        all_categorical() ~ "{n} ({p}%)"
       ),
-      label = list(
-        total_malaria_episodes_during_pregnancy ~ "Total Malaria Episodes (Mean ± SD)",
-        placental_malaria ~ "Placental Malaria (Histology)",
-        preterm_birth_ontoneo ~ "Preterm Birth",
-        stillbirth ~ "Stillbirth",
-        infant_low_birth_weight_2500_g ~ "Low Birth Weight (<2500g)"
-      )
+      label = dynamic_labels
     ) %>%
-    add_p() %>%  # Add p-values for comparisons
-    modify_header(label = "**Variable**") %>%  # Ensure readable column headers
-    bold_labels()  # Bold table labels for clarity
+    add_p(
+      test = list(
+        all_categorical() ~ "fisher.test",
+        all_continuous() ~ "t.test"
+      ),
+      pvalue_fun = format_pvalue  # Apply the fixed p-value formatting function
+    )
+  
+  # Print the updated table
+  print(malaria_outcomes_table)
 
-  #  Display only the formatted table
-  malaria_outcomes_table
 } else {
-  cat("️ No data available for analysis.")
+  message("⚠️ No data available for analysis or insufficient variability in variables.")
 }
 
 ```
-
-
-
-
-
-
-
-
-
-
-
 
 ## Exploratory/Descriptive analysis
 
