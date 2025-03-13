@@ -131,6 +131,16 @@ This section will assess whether placental malaria is associated with preterm bi
 PROMO_Data <- read_csv(here("data", "raw-data", "PROMO_Data.csv"), show_col_types = FALSE)
 ```
 
+
+
+
+
+
+
+
+
+
+
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold"}
 #  Data Cleaning & Transformation
 
@@ -160,51 +170,55 @@ PROMO_Data <- PROMO_Data %>%
   mutate(across(c(study_arm, stillbirth, neonatal_death, placental_malaria, delivery_mode), as.factor)) %>%
   mutate(across(contains("date"), as.Date, format="%Y-%m-%d"))
 
-#  Verify Changes
-glimpse(PROMO_Data)  # More readable than str()
 
-#  Summary of Numeric Variables
-print(skim(PROMO_Data))  # Explicitly print skim output
+# Frequency counts of key categorical variables
+# Store counts in variables without printing
+study_arm_counts <- PROMO_Data %>% count(study_arm, sort = TRUE)
+placental_malaria_counts <- PROMO_Data %>% count(placental_malaria, sort = TRUE)
+preterm_birth_counts <- PROMO_Data %>% count(preterm_birth_ontoneo, sort = TRUE)
 
-#  Frequency Counts of Key Categorical Variables
-PROMO_Data %>% count(study_arm, sort = TRUE) %>% print()
-PROMO_Data %>% count(placental_malaria, sort = TRUE) %>% print()
-PROMO_Data %>% count(preterm_birth_ontoneo, sort = TRUE) %>% print()
 
 
 ```
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold"}
-#  Load required libraries
+# Load required libraries
 library(dplyr)
 library(gtsummary)
 
-#  Select key baseline variables (ensure they exist)
+# Select key baseline variables (ensure they exist)
 baseline_vars <- c("study_arm", "education_level_omrse", "gravidity", "parity", 
                    "placental_malaria", "preterm_birth_ontoneo", "stillbirth", 
                    "neonatal_death", "infant_low_birth_weight_2500_g")
 
-#  Ensure only existing variables are used
+# Ensure only existing variables are used
 baseline_vars <- intersect(baseline_vars, colnames(PROMO_Data))
 
 # Generate table only if dataset has rows
-if (nrow(PROMO_Data) > 0) {
+if (nrow(PROMO_Data) > 0 && length(baseline_vars) > 1) {
+  
   baseline_characteristics <- PROMO_Data %>%
     select(all_of(baseline_vars)) %>%
-    tbl_summary(by = study_arm) %>%
+    tbl_summary(
+      by = study_arm,
+      statistic = list(all_categorical() ~ "{n} ({p}%)", all_continuous() ~ "{mean} ± {sd}")
+    ) %>%
     add_p() %>%
     modify_header(label = "**Variable**") %>%
     bold_labels()
   
-  # Display only the formatted table
+  # REMOVE print() → Directly output the table
   baseline_characteristics
+
 } else {
-  cat("️ No data available for analysis.")
+  cat("⚠️ No data available for analysis.")
 }
+
 
 ```
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold"}
+
 # Load required libraries
 library(dplyr)
 library(gtsummary)
@@ -279,12 +293,12 @@ if (nrow(PROMO_Data) > 0 && length(valid_outcomes) > 1) {
       ),
       pvalue_fun = format_pvalue  # Apply the fixed p-value formatting function
     )
-  
-  # Print the updated table
-  print(malaria_outcomes_table)
+
+  # REMOVE print() → Just place the table here
+  malaria_outcomes_table
 
 } else {
-  message("⚠️ No data available for analysis or insufficient variability in variables.")
+  cat("⚠️ No data available for analysis or insufficient variability in variables.")
 }
 
 ```
