@@ -35,81 +35,85 @@ library(survminer)        # Survival plots
 
 
 
-
-
-
-
 # Data Import & Initial Inspection 
 ```{r}
-# Read the dataset
+# Data Import & Initial Inspection 
+# load the Dataset
 PROMO_Data <- read_csv(here("data", "raw-data", "PROMO_Data.csv"))
 
-# **Dataset Overview**
-cat("Number of Observations:", nrow(PROMO_Data), "\n")
-cat("Number of Variables:", ncol(PROMO_Data), "\n")
-
-# **Inspect Data Structure**
-str(PROMO_Data)
-head(PROMO_Data)
-
-# **Check Missing Values**
-missing_values <- colSums(is.na(PROMO_Data))
-print(missing_values)
-
-# **Summary Statistics**
-summary(PROMO_Data)
-
 ```
-
-
-
 
 
 
 # Data Cleaning & Transformation
 ```{r}
-# Clean Column Names**
-PROMO_Data <- PROMO_Data %>% clean_names()
-
-# **Remove Empty Rows**
+#  Clean Column Names
 PROMO_Data <- PROMO_Data %>%
-  filter(!is.na(study_arm), !is.na(stillbirth), !is.na(neonatal_death), !is.na(infant_low_birth_weight_2500_g))
+  clean_names()  # Standardizes column names (lowercase, removes spaces/special characters)
 
-# **Handle Missing Values**
+#   Check for Missing Values
+missing_summary <- colSums(is.na(PROMO_Data))
+print("Missing Values Summary:")
+print(missing_summary)
+
+#  Handle Missing Values
 PROMO_Data <- PROMO_Data %>%
-  mutate(across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = TRUE), .))) %>%
-  mutate(across(where(is.character), ~ replace_na(., "Unknown")))
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = TRUE), .))) %>%  # Replace NA in numeric columns with median
+  mutate(across(where(is.character), ~ replace_na(., "Unknown")))  # Replace NA in categorical columns with "Unknown"
 
-# **Convert Data Types**
+#   Convert Data Types
 PROMO_Data <- PROMO_Data %>%
-  mutate(across(c(study_arm, stillbirth, neonatal_death, placental_malaria, delivery_mode), as.factor)) %>%
-  mutate(across(contains("date"), as.Date, format="%Y-%m-%d"))
+  mutate(across(c(study_arm, delivery_mode, education_level), as.factor)) %>% # Convert categorical columns to factors
+  mutate(across(contains("date"), as.Date, format="%Y-%m-%d"))  # Convert date columns
 
-# **Verify Changes**
-str(PROMO_Data)
+#  Rename Key Variables for Clarity
+PROMO_Data <- PROMO_Data %>%
+  rename(
+    `Study Arm` = study_arm,
+    `Gestational Age at Enrollment (Weeks)` = gestational_age_at_enrollment_weeks,
+    `Gestational Age at Delivery (Weeks)` = gestational_age_at_delivery,
+    `Education Level` = education_level,
+    `Detection of Malaria Parasites by Microscopy` = proportion_of_plasmodium_positive_blood_smears_during_pregnancy_by_microscopy,
+    `Detection of Malaria Parasites by Microscopy or qPCR` = total_plasmodium_positive_routine_blood_smears_during_pregnancy
+  )
+
+#   Remove Duplicate Rows
+PROMO_Data_Cleaned <- PROMO_Data %>%
+  distinct()  # Removes exact duplicate rows
+
+#  Step 7: Print Summary of Cleaned Data
+summary(PROMO_Data_Cleaned)
+
+#   Display Column Names to Verify
+print("Updated Column Names:")
+print(colnames(PROMO_Data_Cleaned))
 
 ```
 
 
+
+
+
+
+```{r}
+colnames(PROMO_Data_Cleaned)
+
+```
 
 
 
 
 # Exploratory Data Analysis (EDA)
-
 ```{r}
-# **Summary of Numeric Variables**
-skim(PROMO_Data)
+# Number of observations and variables
+cat("Number of Observations:", nrow(PROMO_Data_Cleaned), "\n")
+cat("Number of Variables:", ncol(PROMO_Data_Cleaned), "\n")
 
-# **Frequency Counts of Key Categorical Variables**
-PROMO_Data %>%
-  count(study_arm, sort = TRUE)
+# View structure of dataset
+str(PROMO_Data_Cleaned)
 
-PROMO_Data %>%
-  count(placental_malaria, sort = TRUE)
-
-PROMO_Data %>%
-  count(preterm_birth_ontoneo, sort = TRUE)
+# Quick Summary Statistics
+summary(PROMO_Data_Cleaned)
 
 ```
 
@@ -117,71 +121,250 @@ PROMO_Data %>%
 
 
 
-# Characteristics Tables
-*Baseline Characteristics Table*
 
+*Step 1: Fix Missing Data & Categorize Variables*
+*Baseline Characteristics Table 1*
 ```{r}
-# Select key variables for baseline characteristics
-baseline_vars <- c("study_arm", "education_level_omrse", "gravidity", "parity", 
-                   "placental_malaria", "preterm_birth_ontoneo", "stillbirth", 
-                   "neonatal_death", "infant_low_birth_weight_2500_g")
+library(dplyr)
+library(gtsummary)
 
-# **Ensure selected variables exist**
-baseline_vars <- baseline_vars[baseline_vars %in% colnames(PROMO_Data)]
+# ✅ Fix & Categorize Variables
+PROMO_Data_Cleaned <- PROMO_Data_Cleaned %>%
+  mutate(
+    Age_Category = case_when(
+      age_at_enrollment_years < 18 ~ "<18 (Minors)",
+      age_at_enrollment_years >= 18 & age_at_enrollment_years <= 35 ~ "18–35 (Young Adults)",
+      age_at_enrollment_years >= 36 & age_at_enrollment_years <= 55 ~ "36–55 (Middle-aged)",
+      age_at_enrollment_years > 55 ~ ">55 (Older Adults)",
+      TRUE ~ "Unknown"
+    ),
 
-# Generate formatted table using gtsummary
-baseline_characteristics <- PROMO_Data %>%
-  select(all_of(baseline_vars)) %>%
-  tbl_summary(by = study_arm) %>%
-  add_p() %>%
-  modify_header(label = "**Variable**") %>%
-  bold_labels()
+    # ✅ Fix Education Level Categorization (Put "Unknown" Last)
+    `Education Level` = case_when(
+      `Education Level` %in% c("A level", "O level", "None") ~ "Secondary/No Formal Education",
+      `Education Level` == "Primary" ~ "Primary",
+      `Education Level` %in% c("Tertiary", "University") ~ "Tertiary/Higher Education",
+      is.na(`Education Level`) ~ "Unknown",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("Primary", "Secondary/No Formal Education", "Tertiary/Higher Education", "Unknown")),
 
-baseline_characteristics
+    # ✅ Fix Gravidity Categorization (Put "Unknown" Last)
+    Gravidity = case_when(
+      gravidity == 1 ~ "1",
+      gravidity == 2 ~ "2",
+      gravidity >= 3 ~ "≥3",
+      is.na(gravidity) ~ "Unknown",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("1", "2", "≥3", "Unknown")),
 
-```
+    # ✅ Fix Parity Categorization (Put "Unknown" Last)
+    Parity = case_when(
+      parity == 1 ~ "1",
+      parity == 2 ~ "2",
+      parity >= 3 ~ "≥3",
+      is.na(parity) ~ "Unknown",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("1", "2", "≥3", "Unknown"))
+  )
+# ✅ Define Variables (Maternal Info First, Infant Last)
+baseline_vars <- c(
+  # **Maternal Information**
+  "Age_Category", 
+  "Education Level",
+  "Gravidity", 
+  "Parity", 
+  "Gestational Age at Enrollment (Weeks)", 
+  "Gestational Age at Delivery (Weeks)", 
+  "placental_malaria", 
+  "total_malaria_episodes_during_pregnancy", 
+  "delivery_mode",
 
+  # **Pregnancy Outcomes**
+  "preterm_birth", 
+  "small_for_gestational_age", 
+  "spontaneous_abortion", 
+  "stillbirth", 
+  "neonatal_death",
 
-
-
-*Continuous Characteristics by Study Arm*
-
-```{r}
-# Function to summarize continuous variables
-summarize_continuous <- function(var) {
-  sp_mean <- mean(PROMO_Data[[var]][PROMO_Data$study_arm == "Sulphadoxine-pyrimethamine (SP)"], na.rm = TRUE)
-  sp_sd <- sd(PROMO_Data[[var]][PROMO_Data$study_arm == "Sulphadoxine-pyrimethamine (SP)"], na.rm = TRUE)
-  
-  dp_mean <- mean(PROMO_Data[[var]][PROMO_Data$study_arm == "Dihydroartemisinin-piperaquine (DP)"], na.rm = TRUE)
-  dp_sd <- sd(PROMO_Data[[var]][PROMO_Data$study_arm == "Dihydroartemisinin-piperaquine (DP)"], na.rm = TRUE)
-  
-  p_value <- t.test(PROMO_Data[[var]] ~ PROMO_Data$study_arm, var.equal = TRUE, na.rm = TRUE)$p.value
-  
-  return(c(sprintf("%.1f (%.1f)", sp_mean, sp_sd),
-           sprintf("%.1f (%.1f)", dp_mean, dp_sd),
-           sprintf("%.3f", p_value)))
-}
-
-# Create summary table
-summary_table <- tibble(
-  Characteristic = c("Maternal Age (years)", "Gravidity", "Gestational Age at Delivery (weeks)", "Malaria Episodes During Pregnancy"),
-  `SP (Mean ± SD)` = sapply(c("age_at_enrollment_years", "gravidity", "gestational_age_at_delivery_weeks", "total_malaria_episodes_during_pregnancy"), summarize_continuous)[1,],
-  `DP (Mean ± SD)` = sapply(c("age_at_enrollment_years", "gravidity", "gestational_age_at_delivery_weeks", "total_malaria_episodes_during_pregnancy"), summarize_continuous)[2,],
-  `p-value` = sapply(c("age_at_enrollment_years", "gravidity", "gestational_age_at_delivery_weeks", "total_malaria_episodes_during_pregnancy"), summarize_continuous)[3,]
+  # **Infant Information**
+  "infant_low_birth_weight_2500_g", 
+  "infant_sex6"
 )
 
-# Display table using gt
-summary_table %>%
-  gt() %>%
-  tab_header(title = md("**Table: Continuous Characteristics by Study Arm**")) %>%
-  cols_align(align = "center") %>%
-  tab_options(
-    table.font.size = px(12),
-    heading.title.font.size = px(14),
-    table.border.top.style = "solid",
-    table.border.bottom.style = "solid"
+# ✅ Ensure Variables Exist in the Dataset
+baseline_vars <- baseline_vars[baseline_vars %in% colnames(PROMO_Data_Cleaned)]
+
+# ✅ Create Updated Table (Remove Label Name)
+baseline_table <- PROMO_Data_Cleaned %>%
+  select(all_of(baseline_vars), `Study Arm`) %>%
+  tbl_summary(
+    by = `Study Arm`,
+    statistic = all_categorical() ~ "{n} ({p}%)",
+    missing = "no"
+  ) %>%
+  modify_header(label = "") %>% # Remove the label name
+  bold_labels()
+
+# ✅ Display Table
+baseline_table
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+PROMO_Data_Cleaned <- PROMO_Data_Cleaned %>%
+  mutate(
+    Age_Category = case_when(
+      age_at_enrollment_years < 18 ~ "<18 (Minors)",
+      age_at_enrollment_years >= 18 & age_at_enrollment_years <= 35 ~ "18–35 (Young Adults)",
+      age_at_enrollment_years >= 36 & age_at_enrollment_years <= 55 ~ "36–55 (Middle-aged)",
+      age_at_enrollment_years > 55 ~ ">55 (Older Adults)",
+      TRUE ~ "Unknown"
+    ),
+
+    # ✅ Fix Education Level Categorization (Include "Unknown")
+    `Education Level` = case_when(
+      `Education Level` %in% c("A level", "O level", "None") ~ "Secondary/No Formal Education",
+      `Education Level` == "Primary" ~ "Primary",
+      `Education Level` %in% c("Tertiary", "University") ~ "Tertiary/Higher Education",
+      is.na(`Education Level`) ~ "Unknown",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("Primary", "Secondary/No Formal Education", "Tertiary/Higher Education", "Unknown")),
+
+    # ✅ Fix Gravidity Categorization (Include "Unknown")
+    gravidity = case_when(
+      gravidity == 1 ~ "1",
+      gravidity == 2 ~ "2",
+      gravidity >= 3 ~ "≥3",
+      is.na(gravidity) ~ "Unknown",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("1", "2", "≥3", "Unknown")),
+
+    # ✅ Fix Parity Categorization (Include "Unknown")
+    parity = case_when(
+      parity == 1 ~ "1",
+      parity == 2 ~ "2",
+      parity >= 3 ~ "≥3",
+      is.na(parity) ~ "Unknown",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("1", "2", "≥3", "Unknown"))
   )
 
+
+
+
+
+PROMO_Data_Cleaned <- PROMO_Data_Cleaned %>%
+  mutate(
+    Age_Category = case_when(
+      age_at_enrollment_years < 18 ~ "<18 (Minors)",
+      age_at_enrollment_years >= 18 & age_at_enrollment_years <= 35 ~ "18–35 (Young Adults)",
+      age_at_enrollment_years >= 36 & age_at_enrollment_years <= 55 ~ "36–55 (Middle-aged)",
+      age_at_enrollment_years > 55 ~ ">55 (Older Adults)",
+      TRUE ~ "Unknown"
+    ),
+
+    # ✅ Fix Education Level Categorization (Include "Unknown")
+    `Education Level` = case_when(
+      `Education Level` %in% c("A level", "O level", "None") ~ "Secondary/No Formal Education",
+      `Education Level` == "Primary" ~ "Primary",
+      `Education Level` %in% c("Tertiary", "University") ~ "Tertiary/Higher Education",
+      is.na(`Education Level`) ~ "Unknown",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("Primary", "Secondary/No Formal Education", "Tertiary/Higher Education", "Unknown")),
+
+    # ✅ Fix Gravidity Categorization (Include "Unknown")
+    gravidity = case_when(
+      gravidity == 1 ~ "1",
+      gravidity == 2 ~ "2",
+      gravidity >= 3 ~ "≥3",
+      is.na(gravidity) ~ "Unknown",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("1", "2", "≥3", "Unknown")),
+
+    # ✅ Fix Parity Categorization (Include "Unknown")
+    parity = case_when(
+      parity == 1 ~ "1",
+      parity == 2 ~ "2",
+      parity >= 3 ~ "≥3",
+      is.na(parity) ~ "Unknown",
+      TRUE ~ "Unknown"
+    ) %>% factor(levels = c("1", "2", "≥3", "Unknown"))
+  )
+
+
+
+
+# ✅ Define Baseline Characteristics Variables
+baseline_vars <- c(
+  # **Maternal Information First**
+  "Age_Category", 
+  "Education Level",
+  "Gravidity", 
+  "Parity", 
+  "Gestational Age at Enrollment (Weeks)", 
+  "Gestational Age at Delivery (Weeks)", 
+  "placental_malaria", 
+  "total_malaria_episodes_during_pregnancy", 
+  "delivery_mode",
+
+  # **Pregnancy Outcomes**
+  "preterm_birth", 
+  "small_for_gestational_age", 
+  "spontaneous_abortion", 
+  "stillbirth", 
+  "neonatal_death",
+
+  # **Infant Information**
+  "infant_low_birth_weight_2500_g", 
+  "infant_sex6"
+)
+
+# ✅ Ensure Variables Exist in the Dataset
+baseline_vars <- baseline_vars[baseline_vars %in% colnames(PROMO_Data_Cleaned)]
+
+# ✅ Create Updated Baseline Characteristics Table
+baseline_table <- PROMO_Data_Cleaned %>%
+  select(all_of(baseline_vars), `Study Arm`) %>%
+  tbl_summary(
+    by = `Study Arm`,
+    statistic = all_categorical() ~ "{n} ({p}%)",
+    missing = "no"
+  ) %>%
+  modify_header(label = "**Baseline Characteristics**") %>%
+  bold_labels()
+
+# ✅ Display the Table
+baseline_table
+
+
+
 ```
 
 
@@ -191,8 +374,184 @@ summary_table %>%
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 ```{r}
-colnames(PROMO_Data)
+# Load required packages
+library(dplyr)
+library(gtsummary)
+
+# ✅ Step 1: Categorize Age into Clinically Meaningful Groups
+PROMO_Data_Cleaned <- PROMO_Data_Cleaned %>%
+  mutate(
+    # ✅ Age Category
+    Age_Category = case_when(
+      age_at_enrollment_years < 18 ~ "<18 (Minors)",
+      age_at_enrollment_years >= 18 & age_at_enrollment_years <= 35 ~ "18–35 (Young Adults)",
+      age_at_enrollment_years >= 36 & age_at_enrollment_years <= 55 ~ "36–55 (Middle-aged)",
+      age_at_enrollment_years > 55 ~ ">55 (Older Adults)",
+      TRUE ~ NA_character_
+    ),
+
+    # ✅ Fix Education Level Categorization (Ensuring it’s Correct)
+    Education_Level = case_when(
+      `Education Level` %in% c("A level", "O level", "None") ~ "Secondary/No Formal Education",
+      `Education Level` %in% c("Primary") ~ "Primary",
+      `Education Level` %in% c("Tertiary", "University") ~ "Tertiary/Higher Education",
+      TRUE ~ NA_character_
+    ),
+
+    # Convert to Factor with Proper Levels
+    Education_Level = factor(Education_Level, levels = c("Primary", "Secondary/No Formal Education", "Tertiary/Higher Education")),
+
+    # ✅ Categorize Gravidity
+    Gravidity = factor(case_when(
+      gravidity == 1 ~ "1",
+      gravidity == 2 ~ "2",
+      gravidity >= 3 ~ "≥3",
+      TRUE ~ NA_character_
+    ), levels = c("1", "2", "≥3")),
+
+    # ✅ Categorize Parity
+    Parity = factor(case_when(
+      parity == 1 ~ "1",
+      parity == 2 ~ "2",
+      parity >= 3 ~ "≥3",
+      TRUE ~ NA_character_
+    ), levels = c("1", "2", "≥3"))
+  )
+
+# ✅ Step 2: Define the 16 Key Variables for the Table
+baseline_vars <- c(
+  # 🟢 **Mother's Demographics & Reproductive History**
+  "Age_Category", 
+  "Education_Level",  # ✅ Fixed Education Level Here
+  "Gravidity",
+  "Parity",
+  "Gestational Age at Enrollment (Weeks)", 
+  "Gestational Age at Delivery (Weeks)", 
+  "Placental_malaria", 
+  "Total_malaria_episodes_during_pregnancy",
+  "Study Arm",  # Treatment assignment (SP vs DP)
+  "Delivery_mode", 
+
+  # 🟡 **Pregnancy & Birth Outcomes**
+  "Preterm_birth", 
+  "Small_for_gestational_age", 
+  "Spontaneous_abortion", 
+  "Stillbirth", 
+  "Neonatal_death", 
+
+  # 🔵 **Infant Birth Outcomes**
+  "Infant_low_birth_weight_2500_g", 
+  "Infant_sex6"
+)
+
+# ✅ Step 3: Ensure Variables Exist in the Dataset
+baseline_vars <- baseline_vars[baseline_vars %in% colnames(PROMO_Data_Cleaned)]
+
+# ✅ Step 4: Confirm Total Variables
+cat("Total Variables Selected:", length(baseline_vars), "\n")  # Should output 16
+
+# ✅ Step 5: Create the Baseline Characteristics Table
+baseline_table <- PROMO_Data_Cleaned %>%
+  select(all_of(baseline_vars), `Study Arm`) %>%
+  tbl_summary(
+    by = `Study Arm`,
+    statistic = all_categorical() ~ "{n} ({p}%)",
+    missing = "no"
+  ) %>%
+  modify_header(label = "**Baseline Characteristics**") %>%
+  bold_labels()
+
+# ✅ Step 6: Display the Table
+baseline_table
+
+
+```
+
+
+
+
+# Data Visualization
+
+*Figure 1: Pregnancy Outcomes by Study Arm*
+```{r}
+# Load required packages
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Ensure correct column name for Study Arm
+study_arm_col <- "Study Arm"
+
+# Define pregnancy outcomes
+pregnancy_outcomes <- c("preterm_birth", "stillbirth", "neonatal_death")
+
+# Reshape data for plotting
+pregnancy_data <- PROMO_Data_Cleaned %>%
+  select(all_of(study_arm_col), all_of(pregnancy_outcomes)) %>%
+  pivot_longer(cols = all_of(pregnancy_outcomes), names_to = "Outcome", values_to = "Present") %>%
+  filter(!is.na(Present)) %>%  # Remove missing values
+  group_by(across(all_of(study_arm_col)), Outcome, Present) %>%
+  summarise(Total = n(), .groups = "drop")
+
+# Convert outcome values to categorical (if numeric)
+pregnancy_data$Present <- factor(pregnancy_data$Present, levels = c(0, 1), labels = c("Absent", "Present"))
+
+# Plot Pregnancy Outcomes by Study Arm
+ggplot(pregnancy_data, aes(x = Outcome, y = Total, fill = !!sym(study_arm_col))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Pregnancy Outcomes by Study Arm",
+       x = "Pregnancy Outcome",
+       y = "Total Count",
+       fill = "Study Arm") +
+  theme_minimal() +
+  scale_fill_manual(values = c("lightblue", "pink")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+
+*Placental Malaria by Study Arm*
+```{r}
+# Group and summarize data for placental malaria
+# Ensure correct column name for Study Arm
+study_arm_col <- "Study Arm"
+
+# Group and summarize data for placental malaria
+placental_malaria_data <- PROMO_Data_Cleaned %>%
+  group_by(across(all_of(study_arm_col)), placental_malaria) %>%
+  summarise(Count = n(), .groups = "drop")
+
+# Convert placental malaria values to categorical (if numeric)
+placental_malaria_data$placental_malaria <- factor(placental_malaria_data$placental_malaria, 
+                                                   levels = c(0, 1), 
+                                                   labels = c("No", "Yes"))
+
+# Plot Placental Malaria by Study Arm
+ggplot(placental_malaria_data, aes(x = placental_malaria, y = Count, fill = !!sym(study_arm_col))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Placental Malaria by Study Arm",
+       x = "Placental Malaria",
+       y = "Total Count",
+       fill = "Study Arm") +
+  theme_minimal() +
+  scale_fill_manual(values = c("lightblue", "lightgreen")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 
 ```
 
@@ -205,105 +564,43 @@ colnames(PROMO_Data)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ```{r}
-# Load required libraries
 # Load required libraries
 library(dplyr)
 library(gtsummary)
 
-# Define malaria outcome variables
-malaria_outcome_vars <- c(
-  "total_malaria_episodes_during_pregnancy",
-  "placental_malaria",
-  "preterm_birth_ontoneo",
-  "stillbirth",
-  "infant_low_birth_weight_2500_g"
-)
 
-# Ensure that `study_arm` is in the dataset
-if (!"study_arm" %in% colnames(PROMO_Data)) {
-  stop("⚠️ Error: `study_arm` column not found in PROMO_Data. Please check column names.")
-}
 
-# Remove `stillbirth` and any other variable that has only one level
-valid_outcomes <- malaria_outcome_vars[sapply(PROMO_Data[malaria_outcome_vars], function(x) length(unique(na.omit(x))) > 1)]
 
-# Ensure `study_arm` is included in the selected variables
-valid_outcomes <- c(valid_outcomes, "study_arm")
 
-# Define label mappings dynamically based on valid variables
-all_labels <- list(
-  total_malaria_episodes_during_pregnancy ~ "Total Malaria Episodes (Mean ± SD)",
-  placental_malaria ~ "Placental Malaria (Histology)",
-  preterm_birth_ontoneo ~ "Preterm Birth",
-  stillbirth ~ "Stillbirth",
-  infant_low_birth_weight_2500_g ~ "Low Birth Weight (<2500g)"
-)
 
-dynamic_labels <- all_labels[names(all_labels) %in% valid_outcomes]
 
-# Define a custom function to format p-values
-format_pvalue <- function(pvals) {
-  sapply(pvals, function(x) {
-    if (is.na(x)) {
-      return("NA")  # Handle missing values properly
-    } else if (is.numeric(x)) {
-      if (x < 0.001) {
-        return("< 0.001")  # Report very small values as "< 0.001"
-      } else if (x < 0.01) {
-        return(format(round(x, 3), nsmall = 3))  # Report between 0.001 and 0.01 to three decimal places
-      } else {
-        return(format(round(x, 2), nsmall = 2))  # Report >= 0.01 to two decimal places
-      }
-    } else {
-      return("NA")  # Return "NA" for non-numeric values
-    }
-  })
-}
 
-# Generate table with formatted p-values
-if (nrow(PROMO_Data) > 0 && length(valid_outcomes) > 1) {
-  
-  malaria_outcomes_table <- PROMO_Data %>%
-    select(all_of(valid_outcomes)) %>%
-    tbl_summary(
-      by = "study_arm",
-      statistic = list(
-        total_malaria_episodes_during_pregnancy ~ "{mean} ± {sd}",
-        all_categorical() ~ "{n} ({p}%)"
-      ),
-      label = dynamic_labels
-    ) %>%
-    add_p(
-      test = list(
-        all_categorical() ~ "fisher.test",
-        all_continuous() ~ "t.test"
-      ),
-      pvalue_fun = format_pvalue  # Apply the fixed p-value formatting function
-    )
-  
-  # Print the updated table
-  print(malaria_outcomes_table)
 
-} else {
-  message("⚠️ No data available for analysis or insufficient variability in variables.")
-}
-```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
